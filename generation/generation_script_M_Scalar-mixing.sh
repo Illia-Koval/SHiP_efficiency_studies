@@ -129,11 +129,11 @@ mv "logs/mass_Scalar-mixing_${SLURM_ARRAY_TASK_ID}.err" "logs/Scalar-mixing_${ma
     mv "$root_filename" "$root_filename_with_mode"
     
     #particle tracking
-    pixi run python ${FAIRSHIP}/macro/run_simScript.py --tag signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name"_lots -n 5000 --evtcalc -f "$root_filename_with_mode"
+    pixi run python ${FAIRSHIP}/macro/run_simScript.py --tag signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name" -n 5000 --evtcalc -f "$root_filename_with_mode"
     #->sim_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name".root
 
     #reconstruction
-    pixi run python ${FAIRSHIP}/macro/ShipReco.py -f sim_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name"_lots.root -g geo_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name"_lots.root
+    pixi run python ${FAIRSHIP}/macro/ShipReco.py -f sim_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name".root -g geo_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name".root
     #->sim_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name"_rec.root
 )
 
