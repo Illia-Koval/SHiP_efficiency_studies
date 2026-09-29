@@ -7,7 +7,12 @@
 #SBATCH -o logs/launcher_%j.out
 #SBATCH -e logs/launcher_%j.err
 
-decay_mode_idx=2
+EVENTCALC="/panfs/ikoval/EventCalc-SHiP"
+FAIRSHIP="/panfs/ikoval/FairShip"
+SIM_SIGNAL="/panfs/ikoval/my_work/signal/sim_signal"
+
+#manually choose the decay mode for the generation
+decay_mode_idx=6
 
 #range = Range of masses for EventCalc generations where the job is not killed by small/zero Br
 case "$decay_mode_idx" in
@@ -37,6 +42,7 @@ case "$decay_mode_idx" in
         ;;
 esac
 
+#job resubmission - enables parallelisation on the cluster instead of waiting for each mass to be processed sequentially
 if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     n=${#mass_array[@]}
     echo "Submitting self as array job with --array=0-$((n-1))"
@@ -47,11 +53,11 @@ if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     exit 0
 fi
 
-set -euo pipefail
+#files with logs
+mv "logs/mass_Scalar-mixing_${SLURM_ARRAY_TASK_ID}.out" "logs/Scalar-mixing_${mass}_${decay_mode_name}.out"
+mv "logs/mass_Scalar-mixing_${SLURM_ARRAY_TASK_ID}.err" "logs/Scalar-mixing_${mass}_${decay_mode_name}.err"
 
-EVENTCALC="/panfs/ikoval/EventCalc-SHiP"
-FAIRSHIP="/panfs/ikoval/FairShip"
-SIM_SIGNAL="/panfs/ikoval/FairShip/my_work/signal/sim_signal"
+set -euo pipefail
 
 LLP_NAMES=("" "ALP-SU2L" "ALP-photon" "Dark-photons" "HNL" "Scalar-mixing" "Scalar-quartic")
 llp_name_from_index() { echo "${LLP_NAMES[$1]}"; }
@@ -71,7 +77,7 @@ llp_exact_filename() {
 mass="${mass_array[$SLURM_ARRAY_TASK_ID]}"
 echo "Processing mass=$mass on array task $SLURM_ARRAY_TASK_ID"
 
-#hard-coded particle index - given by the script
+#hard-coded FIP type index - given by the script
 particle_idx=5
 llp_name=$(llp_name_from_index "$particle_idx")
 echo "Selected LLP: $llp_name"
@@ -80,11 +86,8 @@ decay_mode_name=$(decay_mode_from_index "$decay_mode_idx")
 echo "Selected Decay Mode: $decay_mode_name"
 
 n_events=11000 #ask EventCalc to generate 2x more events than simulated - the actual output will have just enough 
-c_tau=10 #hard-coded
+c_tau=10 #hard-coded FIP lifetime
 
-#files with logs
-mv "logs/mass_Scalar-mixing_${SLURM_ARRAY_TASK_ID}.out" "logs/Scalar-mixing_${mass}_${decay_mode_name}.out"
-mv "logs/mass_Scalar-mixing_${SLURM_ARRAY_TASK_ID}.err" "logs/Scalar-mixing_${mass}_${decay_mode_name}.err"
 
 ########   Event Calculator bit   ########
 (
@@ -115,26 +118,24 @@ mv "logs/mass_Scalar-mixing_${SLURM_ARRAY_TASK_ID}.err" "logs/Scalar-mixing_${ma
     #remove QT attempts from GEANT -> job does not crash
     export QT_QPA_PLATFORM=offscreen
 
-    cd "$SIM_SIGNAL"
-
-    echo "### simulation ###"
     #.dat file is not moved -> can be overwritten by differnt modes. Not important anyway
-
     filename=$(llp_exact_filename "$llp_name" "$mass" "$c_tau")
     filename_core="${filename%.dat}"
     root_filename="${filename_core}.root"
     root_filename_with_mode="${filename_core}_${decay_mode_name}.root"
 
-    #avoids overwriting EventCalc root file with same mass and different modes -> used for geometrical acceptance
+    #avoid overwriting EventCalc root file with same mass and different modes -> used for geometrical acceptance
     mv "$root_filename" "$root_filename_with_mode"
-    
+
+    cd "$SIM_SIGNAL"
+
+    echo "### simulation ###"
     #particle tracking
     pixi run python ${FAIRSHIP}/macro/run_simScript.py --tag signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name" -n 5000 --evtcalc -f "$root_filename_with_mode"
     #->sim_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name".root
 
-    #reconstruction
+    echo "### reconstruction ###"
+    #digitisation and reconstruction
     pixi run python ${FAIRSHIP}/macro/ShipReco.py -f sim_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name".root -g geo_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name".root
     #->sim_signal_"$llp_name"_"$mass"_GeV_"$c_tau"_m_"$decay_mode_name"_rec.root
 )
-
-#pixi run python tracking_analysis_M_shell_script.py
